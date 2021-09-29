@@ -1,19 +1,44 @@
 # Maintainer: Oscar Shrimpton <oscar.shrimpton.personal@gmail.com>
 pkgname=autopsy
-pkgver=4.17.0
+pkgver=4.18.0
 pkgrel=1
 pkgdesc='Digital forensics platform and graphical interface to The Sleuth Kit® and other digital forensic tools'
 arch=(x86_64)
 url='http://www.sleuthkit.org/autopsy/'
 license=('Apache-2.0')
-_skver=4.10.1
-depends=(java-runtime=8 testdisk sleuthkit 'sleuthkit-java=4.10.1' java8-openjfx)
-makedepends=()
+_skver=4.10.2
+depends=(java-runtime=8 testdisk sleuthkit "sleuthkit-java=${_skver}" java8-openjfx)
+makedepends=('git' 'ant')
 optdepends=('opencv: media files (64-bit)'
 			'perl-parse-registry: regripper')
-source=(https://github.com/sleuthkit/${pkgname}/releases/download/${pkgname}-${pkgver}/${pkgname}-${pkgver}.zip Autopsy.desktop)
-md5sums=('215827f4395006e535a6909841bf5957'
-         'ab18f5bf01a624774a6e4eccd21dd398')
+source=("${pkgname}-${pkgver}::git+https://github.com/sleuthkit/autopsy.git#tag=${pkgname}-${pkgver}"
+		"sleuthkit-${_skver}::git+https://github.com/sleuthkit/sleuthkit.git#tag=sleuthkit-${_skver}"
+		Autopsy.desktop)
+sha512sums=('SKIP'
+	    'SKIP'
+            'd209bc1947eccaee7520243e8f8ce81daa71404e547a671eec7ca9e95572e305ae75db8058784631ac721c7612de405347be2b4d3124f324c06af9efb6dd82a7')
+prepare() {
+	cd "${pkgname}-${pkgver}"
+
+	sed -i 's/netbeans-vm.apache.org/netbeans-vm1.apache.org/g' nbproject/platform.properties
+}
+
+build() {
+	cd "$srcdir/sleuthkit-${_skver}"
+
+	./bootstrap
+	./configure --prefix=/usr
+	make
+
+	pushd bindings/java
+		ant -q dist
+	popd
+
+	cd "$srcdir/${pkgname}-${pkgver}"
+
+	export TSK_HOME="$srcdir/sleuthkit-${_skver}"
+	ant -v -q build
+}
 
 package() {
   cd "${pkgname}-${pkgver}"
@@ -22,7 +47,8 @@ package() {
   cp -r * $pkgdir/usr/share/${pkgname}/
 
   # copy sleuthkit jar into autopsy
-  rm -f $pkgdir/usr/share/${pkgname}/${pkgname}/modules/ext/sleuthkit-${_skver}.jar
+  mkdir -p "$pkgdir/usr/share/${pkgname}/${pkgname}/modules/ext/"
+  rm -f "$pkgdir/usr/share/${pkgname}/${pkgname}/modules/ext/sleuthkit-${_skver}.jar"
   ln -s /usr/share/java/sleuthkit-${_skver}.jar $pkgdir/usr/share/${pkgname}/${pkgname}/modules/ext/sleuthkit-${_skver}.jar
 
   # overwrite bin/autopsy with proper permissions
